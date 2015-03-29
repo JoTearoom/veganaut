@@ -25,6 +25,7 @@ var files = {
         'app/lib/angular/angular.js',
         'app/lib/d3/d3.js',
         'app/lib/leaflet/dist/leaflet-src.js',
+        'app/lib/leaflet.markercluster/dist/leaflet.markercluster-src.js',
         'app/lib/angular-route/angular-route.js',
         'app/lib/angular-sanitize/angular-sanitize.js',
         'app/lib/angular-ui-bootstrap-bower/ui-bootstrap-tpls.js',

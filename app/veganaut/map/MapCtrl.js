@@ -5,8 +5,9 @@
     module.controller('MapCtrl', [
         '$scope', '$location', '$timeout', 'leafletData', 'angularPiwik',
         'playerService', 'Location', 'locationService', 'backendService',
+        'Leaflet',
         function($scope, $location, $timeout, leafletData, angularPiwik,
-            playerService, Location, locationService, backendService) {
+            playerService, Location, locationService, backendService,L) {
             var player;
 
             /**
@@ -277,9 +278,10 @@
 
                     // Push to map if not already there
                     if (newLocationIsAddedToMap !== true) {
-                        mapPromise.then(function(map) {
+                        mapPromise.then(function() {
                             $scope.newLocation.marker.on('click', locationClickHandler);
-                            $scope.newLocation.marker.addTo(map);
+                            // Add to the clustering layer
+                            clusterLayer.addLayer($scope.newLocation.marker);
                         });
                         newLocationIsAddedToMap = true;
                     }
@@ -357,18 +359,91 @@
             // Get a reference the the leaflet map object
             var mapPromise = leafletData.getMap();
 
+            /*
+             * Create a layer to cluster points
+             *
+             * Note: clustering doesn't understand what hidden markers are so it will show clusers even if the filtering
+             * is hiding all the points in side.
+             */
+            var clusterLayer = new L.MarkerClusterGroup({
+                // Do not show a blue polygon with the area in which there are markers
+                showCoverageOnHover: false,
+                /**
+                 * Custom function for creating the clusder marker which allows use to calculate
+                 * the majority group in the cluser.
+                 *
+                 * See default here:
+                 * https://github.com/Leaflet/Leaflet.markercluster/blob/15ed12654acdc54a4521789c498e4603fe4bf781/src/MarkerClusterGroup.js#L542
+                 * @param cluster
+                 * @returns {L.DivIcon}
+                 */
+                iconCreateFunction: function(cluster) {
+                    // inspired by Location.prototype._updateMarker
+                    // Running counts
+                    var teams = {};
+                    var largestTeam;
+
+                    var markers = cluster.getAllChildMarkers();
+
+                    for (var i = 0; i < markers.length; i++) {
+                        // TODO hidden markers should not be counted here.
+                        var location = locations[markers[i].locationId];
+                        // First increment the team and type counts of this marker
+                        if (angular.isUndefined(teams[location.team])) {
+                            teams[location.team] = 1;
+                        } else {
+                            teams[location.team] += 1;
+                        }
+
+                        // Then check if the largest team changed:
+                        if (angular.isUndefined(largestTeam) || (location.team !== largestTeam && teams[location.team] > teams[largestTeam] )) {
+                            // TODO this doesn't handle ties nicely! the new team must out number the old team to 'win'
+                            largestTeam = location.team;
+                        }
+                    }
+
+
+                    // Create the basic icon settings
+                    var icon = {
+                        iconSize: null, // Needs to be set to null so it can be specified in CSS
+                        className: 'map-location team-' + largestTeam,
+                        html: ''
+                    };
+
+                    // Show the count
+                    // TODO update to propper unique style for the markers
+                    icon.html = '<span class="map-icon icon">' + cluster.getChildCount() + '</span>';
+
+                    return new L.DivIcon(icon);
+
+                }
+            });
+
+            mapPromise.then(function(map) {
+                // Once we have the map add the ClusterLayer
+                map.addLayer(clusterLayer);
+            });
+
             // Register event handlers
             $scope.$on('leafletDirectiveMap.click', mapClickHandler);
 
             // Get the locations
             locationService.getLocations().then(function(loadedLocations) {
                 locations = loadedLocations;
-                mapPromise.then(function(map) {
+                // TODO if map isn't needed can we add directly to the layer without promise?
+                mapPromise.then(function(/*map*/) {
+                    // When bulk adding markers to the cluster layer it's more performance to do it all at once
+                    var markers = [];
+
                     // Go through all the locations and add the marker to the map
                     angular.forEach(locations, function(location) {
                         location.marker.on('click', locationClickHandler);
-                        location.marker.addTo(map);
+
+                        markers.push(location.marker);
                     });
+
+                    // Once all the markers are generated push them to the cluster layer
+                    clusterLayer.addLayers(markers);
 
                     // Apply the current filter value
                     applyFilters($scope.activeFilters);
