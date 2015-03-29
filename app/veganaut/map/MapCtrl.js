@@ -229,8 +229,8 @@
                 // Remove from map if it was added
                 if (newLocationIsAddedToMap === true) {
                     var markerToRemove = $scope.newLocation.marker;
-                    mapPromise.then(function(map) {
-                        map.removeLayer(markerToRemove);
+                    mapPromise.then(function() {
+                        clusterLayer.removeLayer(markerToRemove);
                     });
                 }
                 $scope.isAddingLocation = false;
