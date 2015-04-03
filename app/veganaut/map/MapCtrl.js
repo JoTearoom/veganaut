@@ -228,10 +228,7 @@
                 locationService.activate();
                 // Remove from map if it was added
                 if (newLocationIsAddedToMap === true) {
-                    var markerToRemove = $scope.newLocation.marker;
-                    mapPromise.then(function() {
-                        clusterLayer.removeLayer(markerToRemove);
-                    });
+                    clusterLayer.removeLayer($scope.newLocation.marker);
                 }
                 $scope.isAddingLocation = false;
                 $scope.newLocation = undefined;
@@ -278,11 +275,10 @@
 
                     // Push to map if not already there
                     if (newLocationIsAddedToMap !== true) {
-                        mapPromise.then(function() {
-                            $scope.newLocation.marker.on('click', locationClickHandler);
-                            // Add to the clustering layer
-                            clusterLayer.addLayer($scope.newLocation.marker);
-                        });
+                        $scope.newLocation.marker.on('click', locationClickHandler);
+
+                        // Add to the clustering layer
+                        clusterLayer.addLayer($scope.newLocation.marker);
                         newLocationIsAddedToMap = true;
                     }
 
@@ -368,6 +364,7 @@
             var clusterLayer = new L.MarkerClusterGroup({
                 // Do not show a blue polygon with the area in which there are markers
                 showCoverageOnHover: false,
+
                 /**
                  * Custom function for creating the clusder marker which allows use to calculate
                  * the majority group in the cluser.
@@ -388,31 +385,27 @@
                     for (var i = 0; i < markers.length; i++) {
                         // TODO hidden markers should not be counted here.
                         var location = locations[markers[i].locationId];
+
                         // First increment the team and type counts of this marker
-                        if (angular.isUndefined(teams[location.team])) {
-                            teams[location.team] = 1;
-                        } else {
-                            teams[location.team] += 1;
-                        }
+                        teams[location.team] = (teams[location.team] || 0) + 1;
 
                         // Then check if the largest team changed:
-                        if (angular.isUndefined(largestTeam) || (location.team !== largestTeam && teams[location.team] > teams[largestTeam] )) {
+                        if (angular.isUndefined(largestTeam) || (location.team !== largestTeam && teams[location.team] > teams[largestTeam])) {
                             // TODO this doesn't handle ties nicely! the new team must out number the old team to 'win'
                             largestTeam = location.team;
                         }
                     }
 
-
                     // Create the basic icon settings
                     var icon = {
                         iconSize: null, // Needs to be set to null so it can be specified in CSS
-                        className: 'map-location team-' + largestTeam,
+                        className: 'map-location map-location--cluster team-' + largestTeam,
                         html: ''
                     };
 
                     // Show the count
                     // TODO update to propper unique style for the markers
-                    icon.html = '<span class="map-icon icon">' + cluster.getChildCount() + '</span>';
+                    icon.html = '<span class="map-icon map-icon--cluster">' + cluster.getChildCount() + '</span>';
 
                     return new L.DivIcon(icon);
 
@@ -430,24 +423,21 @@
             // Get the locations
             locationService.getLocations().then(function(loadedLocations) {
                 locations = loadedLocations;
-                // TODO if map isn't needed can we add directly to the layer without promise?
-                mapPromise.then(function(/*map*/) {
-                    // When bulk adding markers to the cluster layer it's more performance to do it all at once
-                    var markers = [];
 
-                    // Go through all the locations and add the marker to the map
-                    angular.forEach(locations, function(location) {
-                        location.marker.on('click', locationClickHandler);
+                // When bulk adding markers to the cluster layer it's more performance to do it all at once
+                var markers = [];
 
-                        markers.push(location.marker);
-                    });
-
-                    // Once all the markers are generated push them to the cluster layer
-                    clusterLayer.addLayers(markers);
-
-                    // Apply the current filter value
-                    applyFilters($scope.activeFilters);
+                // Go through all the locations and add the marker to the map
+                angular.forEach(locations, function(location) {
+                    location.marker.on('click', locationClickHandler);
+                    markers.push(location.marker);
                 });
+
+                // Once all the markers are generated push them to the cluster layer
+                clusterLayer.addLayers(markers);
+
+                // Apply the current filter value
+                applyFilters($scope.activeFilters);
             });
 
             // Check if we are logged in
